@@ -6,9 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased] - 2025-12-31
+## [Unreleased] - 2026-01-01
 
 ### Added
+
+#### StatusLine System
+- **Neo-themed persistent status bar** at bottom of Claude Code terminal
+- **Sections with emoji icons and headers:**
+  - `[Model]` - Current Claude model (Opus 4.5, Sonnet, etc.)
+  - `📁 Project:` - Current working directory name
+  - `🌿 Branch:` - Git branch with dirty state (*) and ahead/behind sync
+  - `🔋 Battery:` - macOS battery percentage
+  - `💰 Cost:` - Session cost in USD
+  - `📋 Context:` - Context window usage percentage
+  - `⏰ Session:` - Total session duration
+  - `✏️ Changes:` - Lines added/removed (+N-M)
+- **Visual design:**
+  - Clean separators (│) between sections
+  - Consistent emoji color palette (green: 🌿🔋, brown/yellow: 📁💰📋⏰✏️)
+  - ANSI bright white for values, dim for headers/separators
+  - Environment warnings (🔴 PROD, 🟡 STAGE) when detected
+- **Smart version detection** - Extracts version from model ID without duplication
 
 #### Voice System Enhancements
 - **Pre-TTS Gong Notification**: Added meditative gong sound that plays before voice announcements
@@ -93,6 +111,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 | File | Status | Lines | Description |
 |------|--------|-------|-------------|
+| `statusline.sh` | Added | 136 | Neo-themed persistent status bar with ANSI styling |
 | `hooks/stop-hook-voice.ts` | Modified | 567 | Smart extraction, usage tracking, cost calculation |
 | `hooks/update-tab-titles.ts` | Modified | 109 | Added prompt start time recording |
 | `voice-server/server.ts` | Modified | 392 | Added chime support |
