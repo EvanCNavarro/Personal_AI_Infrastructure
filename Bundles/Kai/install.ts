@@ -1,16 +1,20 @@
 #!/usr/bin/env bun
 /**
- * Kai Bundle Installation Wizard v1.2.0
+ * Kai Bundle Installation Wizard v2.0.0
  *
- * Simplified interactive CLI wizard for setting up the Kai bundle.
- * Auto-detects AI system directories and creates safety backups.
+ * Complete installation wizard for setting up the Kai bundle.
+ * Auto-detects AI systems, creates safety backups, and installs:
+ * - Claude Code hooks (completion, security, event capture)
+ * - Voice server with ElevenLabs TTS (optional)
+ * - Settings.json with hook configuration
  *
  * Usage: bun run install.ts
  */
 
 import { $ } from "bun";
 import * as readline from "readline";
-import { existsSync } from "fs";
+import { existsSync, readdirSync, statSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { join, dirname } from "path";
 
 // =============================================================================
 // TYPES
@@ -175,6 +179,138 @@ async function detectAndBackup(): Promise<boolean> {
   await $`cp -r ${claudeDir} ${backupDir}`;
   console.log("✓ Backup complete.\n");
   return true;
+}
+
+// =============================================================================
+// BUNDLE FILE COPYING
+// =============================================================================
+
+function getBundleDir(): string {
+  // install.ts is at Bundles/Kai/install.ts
+  // Bundle files are at Bundles/Kai/~/.claude/
+  const scriptDir = dirname(Bun.main);
+  return join(scriptDir, "~", ".claude");
+}
+
+function copyDirRecursive(src: string, dest: string, exclude: string[] = []): void {
+  if (!existsSync(src)) {
+    console.log(`  ⚠️  Source directory not found: ${src}`);
+    return;
+  }
+
+  if (!existsSync(dest)) {
+    mkdirSync(dest, { recursive: true });
+  }
+
+  const entries = readdirSync(src);
+  for (const entry of entries) {
+    if (exclude.includes(entry)) {
+      continue;
+    }
+
+    const srcPath = join(src, entry);
+    const destPath = join(dest, entry);
+    const stat = statSync(srcPath);
+
+    if (stat.isDirectory()) {
+      copyDirRecursive(srcPath, destPath, exclude);
+    } else {
+      copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+function mergeSettings(bundleSettingsPath: string, targetSettingsPath: string): void {
+  // Load bundle settings template
+  if (!existsSync(bundleSettingsPath)) {
+    console.log("  ⚠️  settings.template.json not found in bundle");
+    return;
+  }
+
+  const bundleSettings = JSON.parse(readFileSync(bundleSettingsPath, "utf-8"));
+
+  // If target settings exist, merge hooks
+  if (existsSync(targetSettingsPath)) {
+    try {
+      const existingSettings = JSON.parse(readFileSync(targetSettingsPath, "utf-8"));
+
+      // Merge env (bundle wins for overlapping keys)
+      existingSettings.env = { ...existingSettings.env, ...bundleSettings.env };
+
+      // Merge hooks arrays (bundle hooks added if not already present)
+      if (bundleSettings.hooks) {
+        existingSettings.hooks = existingSettings.hooks || {};
+
+        for (const [hookType, hookConfigs] of Object.entries(bundleSettings.hooks)) {
+          if (!existingSettings.hooks[hookType]) {
+            existingSettings.hooks[hookType] = hookConfigs;
+          } else {
+            // Check if hooks with same command already exist
+            const existingCommands = new Set(
+              existingSettings.hooks[hookType].flatMap((h: any) =>
+                h.hooks?.map((hh: any) => hh.command) || []
+              )
+            );
+
+            for (const config of hookConfigs as any[]) {
+              const hasNew = config.hooks?.some((h: any) => !existingCommands.has(h.command));
+              if (hasNew) {
+                existingSettings.hooks[hookType].push(config);
+              }
+            }
+          }
+        }
+      }
+
+      writeFileSync(targetSettingsPath, JSON.stringify(existingSettings, null, 2));
+      console.log("  ✓ Merged hooks into existing settings.json");
+    } catch (e) {
+      console.log("  ⚠️  Failed to merge settings, using template as-is");
+      copyFileSync(bundleSettingsPath, targetSettingsPath);
+    }
+  } else {
+    // No existing settings, use template directly
+    copyFileSync(bundleSettingsPath, targetSettingsPath);
+    console.log("  ✓ Created settings.json from template");
+  }
+}
+
+async function copyBundleFiles(claudeDir: string, voiceEnabled: boolean): Promise<void> {
+  const bundleDir = getBundleDir();
+
+  console.log("\nCopying bundle files...");
+
+  // Copy hooks directory (excluding any personal files)
+  const hooksSource = join(bundleDir, "hooks");
+  const hooksDest = join(claudeDir, "hooks");
+  console.log("  Copying hooks...");
+  copyDirRecursive(hooksSource, hooksDest, []);
+  console.log("  ✓ Hooks installed");
+
+  // Copy voice-server directory if voice is enabled
+  if (voiceEnabled) {
+    const voiceSource = join(bundleDir, "voice-server");
+    const voiceDest = join(claudeDir, "voice-server");
+    console.log("  Copying voice-server...");
+    copyDirRecursive(voiceSource, voiceDest, []);
+    console.log("  ✓ Voice server installed");
+
+    // Make scripts executable
+    const scripts = ["start.sh", "stop.sh", "restart.sh"];
+    for (const script of scripts) {
+      const scriptPath = join(voiceDest, script);
+      if (existsSync(scriptPath)) {
+        await $`chmod +x ${scriptPath}`;
+      }
+    }
+    console.log("  ✓ Voice server scripts made executable");
+  }
+
+  // Merge settings.json
+  const settingsSource = join(bundleDir, "settings.template.json");
+  const settingsDest = join(claudeDir, "settings.json");
+  console.log("  Configuring Claude Code settings...");
+  mergeSettings(settingsSource, settingsDest);
 }
 
 // =============================================================================
@@ -417,7 +553,7 @@ async function main() {
 ║   ██║  ██╗██║  ██║██║    ██████╔╝╚██████╔╝██║ ╚████║██████╔╝███████╗
 ║   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝    ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚═════╝ ╚══════╝
 ║                                                                   ║
-║              Personal AI Infrastructure - v1.2.0                  ║
+║              Personal AI Infrastructure - v2.0.0                  ║
 ║                                                                   ║
 ╚═══════════════════════════════════════════════════════════════════╝
   `);
@@ -474,6 +610,9 @@ ${config.elevenLabsVoiceId ? `ELEVENLABS_VOICE_ID="${config.elevenLabsVoiceId}"`
 `;
     await Bun.write(`${claudeDir}/.env`, envFileContent);
 
+    // Copy bundle files (hooks, voice-server, settings)
+    await copyBundleFiles(claudeDir, !!config.elevenLabsApiKey);
+
     // Add to shell profile
     console.log("Updating shell profile...");
     const shell = process.env.SHELL || "/bin/zsh";
@@ -515,6 +654,11 @@ ${config.elevenLabsVoiceId ? `export ELEVENLABS_VOICE_ID="${config.elevenLabsVoi
     // Summary
     printHeader("INSTALLATION COMPLETE");
 
+    const voiceStatus = config.elevenLabsApiKey ? "Enabled" : "Disabled";
+    const voiceInstructions = config.elevenLabsApiKey
+      ? `  4. Start voice server: ~/.claude/voice-server/start.sh`
+      : "";
+
     console.log(`
 Your Kai system is configured:
 
@@ -523,23 +667,23 @@ Your Kai system is configured:
   🤖 Assistant Name: ${config.daName}
   👤 User: ${config.userName}
   🌍 Timezone: ${config.timeZone}
-  🔊 Voice: ${config.elevenLabsApiKey ? "Enabled" : "Disabled"}
+  🔊 Voice: ${voiceStatus}
 
-Files created:
+Files installed:
   - ~/.claude/skills/CORE/SKILL.md
   - ~/.claude/skills/CORE/Contacts.md
   - ~/.claude/skills/CORE/CoreStack.md
   - ~/.claude/.env
+  - ~/.claude/settings.json (Claude Code hooks)
+  - ~/.claude/hooks/* (completion hooks, security validator, etc.)${config.elevenLabsApiKey ? `
+  - ~/.claude/voice-server/* (TTS server, chime audio)` : ""}
 
 Next steps:
 
-  1. Install the packs IN ORDER by giving each pack file to your AI:
-     - kai-hook-system.md
-     - kai-history-system.md
-     - kai-core-install.md
-     - kai-voice-system.md (optional, requires ElevenLabs)
-
-  2. Restart Claude Code to activate hooks
+  1. Restart Claude Code to activate hooks
+  2. Source your shell profile: source ~/.zshrc
+  3. Test by running any Claude Code command${voiceInstructions ? `
+${voiceInstructions}` : ""}
 
 Your backup is at ~/.claude-BACKUP if you need to restore.
 `);

@@ -295,7 +295,7 @@ function extractCompletion(text: string, toolCalls: string[] = [], agentType: st
     const sentences = text.split(/[.!?\n]+/).filter(s => {
       const trimmed = s.trim();
       return trimmed.length > 15 &&
-             !trimmed.match(/^(Yes|No|Sure|Ok|Here|Let me|I'll|I will|Now|Bobby)/i);
+             !trimmed.match(/^(Yes|No|Sure|Ok|Here|Let me|I'll|I will|Now)/i);
     });
 
     if (sentences.length > 0) {
