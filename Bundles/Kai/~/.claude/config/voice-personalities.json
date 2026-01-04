@@ -1,0 +1,87 @@
+{
+  "default_rate": 175,
+  "default_volume": 0.8,
+  "notification_server": "http://localhost:8888/notify",
+  "voices": {
+    "pai": {
+      "voice_id": "YOUR_ELEVENLABS_VOICE_ID",
+      "voice_name": "PAI",
+      "stability": 0.38,
+      "similarity_boost": 0.70,
+      "archetype": "enthusiast",
+      "description": "Your personal AI: expressive, helpful, genuinely invested in your success"
+    },
+    "engineer": {
+      "voice_id": "YOUR_ELEVENLABS_VOICE_ID",
+      "voice_name": "Engineer",
+      "stability": 0.72,
+      "similarity_boost": 0.88,
+      "archetype": "wise-leader",
+      "description": "Battle-scarred leader: thinks in years not sprints"
+    },
+    "architect": {
+      "voice_id": "YOUR_ELEVENLABS_VOICE_ID",
+      "voice_name": "Architect",
+      "stability": 0.75,
+      "similarity_boost": 0.88,
+      "archetype": "wise-leader",
+      "description": "Academic wisdom: sees timeless patterns vs trends"
+    },
+    "intern": {
+      "voice_id": "YOUR_ELEVENLABS_VOICE_ID",
+      "voice_name": "Intern",
+      "stability": 0.30,
+      "similarity_boost": 0.65,
+      "archetype": "enthusiast",
+      "description": "Brilliant overachiever: brain races ahead"
+    },
+    "designer": {
+      "voice_id": "YOUR_ELEVENLABS_VOICE_ID",
+      "voice_name": "Designer",
+      "stability": 0.52,
+      "similarity_boost": 0.84,
+      "archetype": "critic",
+      "description": "Design school perfectionist: exacting standards"
+    },
+    "researcher": {
+      "voice_id": "YOUR_ELEVENLABS_VOICE_ID",
+      "voice_name": "Researcher",
+      "stability": 0.64,
+      "similarity_boost": 0.90,
+      "archetype": "analyst",
+      "description": "Strategic thinker: sees three moves ahead"
+    },
+    "pentester": {
+      "voice_id": "YOUR_ELEVENLABS_VOICE_ID",
+      "voice_name": "Pentester",
+      "stability": 0.18,
+      "similarity_boost": 0.85,
+      "archetype": "enthusiast",
+      "description": "Reformed grey hat: giddy finding vulnerabilities"
+    },
+    "artist": {
+      "voice_id": "YOUR_ELEVENLABS_VOICE_ID",
+      "voice_name": "Artist",
+      "stability": 0.20,
+      "similarity_boost": 0.52,
+      "archetype": "enthusiast",
+      "description": "Aesthetic anarchist: follows invisible beauty threads"
+    },
+    "writer": {
+      "voice_id": "YOUR_ELEVENLABS_VOICE_ID",
+      "voice_name": "Writer",
+      "stability": 0.48,
+      "similarity_boost": 0.78,
+      "archetype": "storyteller",
+      "description": "Technical storyteller: translates complexity into narrative"
+    },
+    "default": {
+      "voice_id": "YOUR_ELEVENLABS_VOICE_ID",
+      "voice_name": "Default",
+      "stability": 0.50,
+      "similarity_boost": 0.75,
+      "archetype": "professional",
+      "description": "Balanced professional delivery"
+    }
+  }
+}
