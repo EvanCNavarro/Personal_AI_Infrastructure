@@ -99,6 +99,20 @@ TTS_PROVIDER="piper"
 
 ---
 
+## Environment Variables
+
+The bundle uses `~/.claude/.env` for all configuration. See [`.env.example`](.env.example) for the complete reference with all available options:
+
+- **Identity:** AI name, timezone
+- **Voice TTS:** Provider selection, ElevenLabs/Piper/macOS config
+- **Platform tokens:** GitHub, Vercel, Supabase, Cloudflare, Sentry, OpenAI, Google Cloud
+- **MCP servers:** API keys for Model Context Protocol integrations
+- **Hooks:** Enable/disable specific hooks, debug mode
+
+The installer creates a basic `.env` for you. Copy options from `.env.example` as needed.
+
+---
+
 ## Prerequisites
 
 - [Bun](https://bun.sh): `curl -fsSL https://bun.sh/install | bash`
