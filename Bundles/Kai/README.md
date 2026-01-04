@@ -2,7 +2,7 @@
   <img src="kai.png" alt="The Official PAI (Kai) Bundle" width="256">
 </p>
 
-# The Official PAI (Kai) Bundle v1.4.0
+# The Official PAI (Kai) Bundle v1.5.0
 
 > A complete AI assistant infrastructure with voice notifications, skills system, statusline, and more.
 
@@ -84,9 +84,32 @@ The wizard will:
 - **Statusline** - Real-time display of model, cost, context usage in terminal
 - **Voice Notifications** - Spoken completion summaries (Piper/ElevenLabs/macOS)
 - **Gong Chime** - Audio notification before voice playback
-- **Skills System** - Modular capabilities with searchable index
+- **16 Workflow Skills** - Complete development methodology (see below)
 - **Security Hooks** - Protection against dangerous operations
 - **History Capture** - Sessions, decisions, learnings tracked
+
+---
+
+## Included Skills (16)
+
+| Skill | Purpose |
+|-------|---------|
+| **CORE** | Identity, stack preferences, contacts |
+| **CreateSkill** | Meta-skill for creating new skills |
+| **brainstorming** | Explore ideas before implementation |
+| **writing-plans** | Create detailed implementation plans |
+| **executing-plans** | Execute plans with review checkpoints |
+| **test-driven-development** | Write tests before implementation |
+| **systematic-debugging** | Root cause analysis before fixes |
+| **verification-before-completion** | Confirm before claiming done |
+| **requesting-code-review** | Verify work meets requirements |
+| **receiving-code-review** | Process feedback with technical rigor |
+| **using-git-worktrees** | Isolate feature work in worktrees |
+| **dispatching-parallel-agents** | Run independent tasks concurrently |
+| **subagent-driven-development** | Execute plans with subagents |
+| **finishing-a-development-branch** | Complete work with merge/PR options |
+| **writing-skills** | Create and validate new skills |
+| **using-superpowers** | Introduction to the skill system |
 
 ---
 
@@ -220,6 +243,15 @@ The Kai system embeds these principles from [PAI](https://danielmiessler.com/blo
 ---
 
 ## Changelog
+
+### 1.5.0 - 2026-01-04
+- **16 Workflow Skills:** Added complete superpowers skill set
+- **brainstorming:** Explore ideas before implementation
+- **writing-plans:** Create detailed implementation plans
+- **systematic-debugging:** Root cause analysis methodology
+- **test-driven-development:** Write tests first
+- **verification-before-completion:** Confirm before claiming done
+- **Plus 9 more:** Code review, git worktrees, parallel agents, etc.
 
 ### 1.4.0 - 2026-01-04
 - **Complete Installer:** Now installs ALL bundle components (was missing most files)
