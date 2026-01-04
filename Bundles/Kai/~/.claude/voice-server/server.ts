@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 // $PAI_DIR/voice-server/server.ts
-// Voice notification server using ElevenLabs TTS
+// Voice notification server with cascading TTS: ElevenLabs → Piper → macOS
 
 import { serve } from "bun";
-import { spawn } from "child_process";
+import { spawn, execSync } from "child_process";
 import { homedir } from "os";
 import { join } from "path";
 import { existsSync, readFileSync } from "fs";
@@ -43,6 +43,16 @@ if (!ELEVENLABS_API_KEY) {
 const DEFAULT_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || "s3TPKV1kjDlVtZbl4Ksh";
 const CHIME_ENABLED = process.env.VOICE_CHIME_ENABLED !== 'false';
 const CHIME_PATH = expandPath(process.env.VOICE_CHIME_PATH || join(paiDir, 'voice-server', 'chime.mp3'));
+
+// TTS Provider configuration
+type TTSProvider = 'elevenlabs' | 'piper' | 'macos';
+const TTS_PROVIDER = (process.env.TTS_PROVIDER as TTSProvider) || 'elevenlabs';
+const PIPER_MODEL_PATH = expandPath(process.env.PIPER_MODEL_PATH || join(paiDir, 'voice-server', 'piper-models', 'en_US-lessac-medium.onnx'));
+const MACOS_VOICE = process.env.MACOS_VOICE || 'Samantha'; // Default macOS voice
+
+// Track ElevenLabs failures to auto-fallback
+let elevenLabsFailCount = 0;
+const ELEVENLABS_MAX_FAILS = 3;
 
 interface VoiceConfig {
   voice_id: string;
@@ -142,7 +152,7 @@ function validateInput(input: any): { valid: boolean; error?: string; sanitized?
   return { valid: true, sanitized };
 }
 
-async function generateSpeech(
+async function generateSpeechElevenLabs(
   text: string,
   voiceId: string,
   voiceSettings?: { stability: number; similarity_boost: number }
@@ -170,10 +180,134 @@ async function generateSpeech(
 
   if (!response.ok) {
     const errorText = await response.text();
+    // Check for quota/rate limit errors
+    if (response.status === 429 || errorText.includes('quota') || errorText.includes('limit')) {
+      elevenLabsFailCount = ELEVENLABS_MAX_FAILS; // Force fallback
+    }
     throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
   }
 
+  elevenLabsFailCount = 0; // Reset on success
   return await response.arrayBuffer();
+}
+
+async function generateSpeechPiper(text: string): Promise<ArrayBuffer> {
+  if (!existsSync(PIPER_MODEL_PATH)) {
+    throw new Error(`Piper model not found at ${PIPER_MODEL_PATH}`);
+  }
+
+  const tempFile = `/tmp/piper-${Date.now()}.wav`;
+
+  return new Promise((resolve, reject) => {
+    const proc = spawn('piper', [
+      '--model', PIPER_MODEL_PATH,
+      '--output_file', tempFile
+    ], { stdio: ['pipe', 'pipe', 'pipe'] });
+
+    proc.stdin.write(text);
+    proc.stdin.end();
+
+    let stderr = '';
+    proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+    proc.on('error', (error) => {
+      reject(new Error(`Piper process error: ${error.message}`));
+    });
+
+    proc.on('exit', async (code) => {
+      if (code !== 0) {
+        reject(new Error(`Piper exited with code ${code}: ${stderr}`));
+        return;
+      }
+
+      try {
+        const audioData = await Bun.file(tempFile).arrayBuffer();
+        spawn('/bin/rm', [tempFile]); // Cleanup
+        resolve(audioData);
+      } catch (err: any) {
+        reject(new Error(`Failed to read Piper output: ${err.message}`));
+      }
+    });
+  });
+}
+
+async function generateSpeechMacOS(text: string): Promise<ArrayBuffer> {
+  const tempFile = `/tmp/say-${Date.now()}.aiff`;
+
+  return new Promise((resolve, reject) => {
+    const proc = spawn('/usr/bin/say', [
+      '-v', MACOS_VOICE,
+      '-o', tempFile,
+      text
+    ]);
+
+    proc.on('error', (error) => {
+      reject(new Error(`macOS say error: ${error.message}`));
+    });
+
+    proc.on('exit', async (code) => {
+      if (code !== 0) {
+        reject(new Error(`macOS say exited with code ${code}`));
+        return;
+      }
+
+      try {
+        const audioData = await Bun.file(tempFile).arrayBuffer();
+        spawn('/bin/rm', [tempFile]); // Cleanup
+        resolve(audioData);
+      } catch (err: any) {
+        reject(new Error(`Failed to read macOS say output: ${err.message}`));
+      }
+    });
+  });
+}
+
+// Cascading TTS: ElevenLabs → Piper → macOS
+async function generateSpeech(
+  text: string,
+  voiceId: string,
+  voiceSettings?: { stability: number; similarity_boost: number }
+): Promise<{ audio: ArrayBuffer; provider: TTSProvider; format: 'mp3' | 'wav' | 'aiff' }> {
+  const providers: TTSProvider[] = [];
+
+  // Determine provider order based on config and availability
+  if (TTS_PROVIDER === 'elevenlabs' && ELEVENLABS_API_KEY && elevenLabsFailCount < ELEVENLABS_MAX_FAILS) {
+    providers.push('elevenlabs');
+  }
+  if (TTS_PROVIDER !== 'macos' && existsSync(PIPER_MODEL_PATH)) {
+    providers.push('piper');
+  }
+  providers.push('macos'); // Always available as final fallback
+
+  let lastError: Error | null = null;
+
+  for (const provider of providers) {
+    try {
+      console.log(`🎙️  Trying ${provider}...`);
+
+      switch (provider) {
+        case 'elevenlabs':
+          const elevenLabsAudio = await generateSpeechElevenLabs(text, voiceId, voiceSettings);
+          return { audio: elevenLabsAudio, provider: 'elevenlabs', format: 'mp3' };
+
+        case 'piper':
+          const piperAudio = await generateSpeechPiper(text);
+          return { audio: piperAudio, provider: 'piper', format: 'wav' };
+
+        case 'macos':
+          const macosAudio = await generateSpeechMacOS(text);
+          return { audio: macosAudio, provider: 'macos', format: 'aiff' };
+      }
+    } catch (error: any) {
+      console.warn(`⚠️  ${provider} failed: ${error.message}`);
+      lastError = error;
+      if (provider === 'elevenlabs') {
+        elevenLabsFailCount++;
+      }
+    }
+  }
+
+  throw lastError || new Error('All TTS providers failed');
 }
 
 function getVolumeSetting(): number {
@@ -184,8 +318,8 @@ function getVolumeSetting(): number {
   return 0.8;
 }
 
-async function playAudio(audioBuffer: ArrayBuffer): Promise<void> {
-  const tempFile = `/tmp/voice-${Date.now()}.mp3`;
+async function playAudio(audioBuffer: ArrayBuffer, format: 'mp3' | 'wav' | 'aiff' = 'mp3'): Promise<void> {
+  const tempFile = `/tmp/voice-${Date.now()}.${format}`;
   await Bun.write(tempFile, audioBuffer);
   const volume = getVolumeSetting();
 
@@ -247,7 +381,7 @@ async function sendNotification(
   const { cleaned, emotion } = extractEmotionalMarker(safeMessage);
   safeMessage = cleaned;
 
-  if (voiceEnabled && ELEVENLABS_API_KEY) {
+  if (voiceEnabled) {
     try {
       const voice = voiceId || DEFAULT_VOICE_ID;
       const voiceConfig = getVoiceConfig(voice);
@@ -271,16 +405,18 @@ async function sendNotification(
         await playChime();
       }
 
-      console.log(`🎙️  Generating speech (voice: ${voice}, stability: ${voiceSettings.stability})`);
+      console.log(`📝 Message text: "${safeMessage.substring(0, 100)}..."`);
 
-      const audioBuffer = await generateSpeech(safeMessage, voice, voiceSettings);
-      await playAudio(audioBuffer);
-    } catch (error) {
-      console.error("Failed to generate/play speech:", error);
+      const result = await generateSpeech(safeMessage, voice, voiceSettings);
+      console.log(`✅ Speech generated via ${result.provider}: ${result.audio.byteLength} bytes`);
+      await playAudio(result.audio, result.format);
+      console.log(`✅ Audio playback complete (${result.provider})`);
+    } catch (error: any) {
+      console.error("❌ TTS Error:", error?.message || error);
+      const errorLog = `${new Date().toISOString()} - TTS Error: ${error?.message || error}\nMessage: ${safeMessage}\n\n`;
+      await Bun.write(`${paiDir}/voice-server/error.log`, errorLog, { flags: 'a' });
     }
   }
-
-  // Push notification disabled - voice output only
 }
 
 const requestCounts = new Map<string, { count: number; resetTime: number }>();
@@ -354,19 +490,25 @@ const server = serve({
     }
 
     if (url.pathname === "/health") {
+      const providers = {
+        elevenlabs: { available: !!ELEVENLABS_API_KEY, failCount: elevenLabsFailCount },
+        piper: { available: existsSync(PIPER_MODEL_PATH), model: PIPER_MODEL_PATH },
+        macos: { available: true, voice: MACOS_VOICE }
+      };
       return new Response(
         JSON.stringify({
           status: "healthy",
           port: PORT,
-          voice_system: "ElevenLabs",
+          tts_provider: TTS_PROVIDER,
+          providers,
           default_voice_id: DEFAULT_VOICE_ID,
-          api_key_configured: !!ELEVENLABS_API_KEY
+          chime_enabled: CHIME_ENABLED
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     }
 
-    return new Response("PAI Voice Server - POST to /notify", {
+    return new Response("PAI Voice Server - POST to /notify (Cascading TTS: ElevenLabs → Piper → macOS)", {
       headers: corsHeaders,
       status: 200
     });
@@ -374,8 +516,10 @@ const server = serve({
 });
 
 console.log(`🚀 Voice Server running on port ${PORT}`);
-console.log(`🎙️  Using ElevenLabs TTS (default voice: ${DEFAULT_VOICE_ID})`);
+console.log(`🎙️  TTS Provider: ${TTS_PROVIDER} (cascade: ElevenLabs → Piper → macOS)`);
+console.log(`   ElevenLabs: ${ELEVENLABS_API_KEY ? '✅ API key configured' : '❌ No API key'}`);
+console.log(`   Piper: ${existsSync(PIPER_MODEL_PATH) ? '✅ Model found' : '❌ Model not found'}`);
+console.log(`   macOS: ✅ Always available (voice: ${MACOS_VOICE})`);
 console.log(`🔔 Chime: ${CHIME_ENABLED ? '✅ Enabled' : '❌ Disabled'}${CHIME_ENABLED && existsSync(CHIME_PATH) ? ` (${CHIME_PATH})` : ''}`);
 console.log(`📡 POST to http://localhost:${PORT}/notify`);
 console.log(`🔒 Security: CORS restricted to localhost, rate limiting enabled`);
-console.log(`🔑 API Key: ${ELEVENLABS_API_KEY ? '✅ Configured' : '❌ Missing'}`);

@@ -26,10 +26,13 @@ interface AISystem {
   exists: boolean;
 }
 
+type TTSProvider = 'none' | 'piper' | 'elevenlabs' | 'macos';
+
 interface WizardConfig {
   daName: string;
   timeZone: string;
   userName: string;
+  ttsProvider: TTSProvider;
   elevenLabsApiKey?: string;
   elevenLabsVoiceId?: string;
 }
@@ -353,24 +356,49 @@ async function gatherConfig(): Promise<WizardConfig> {
     Intl.DateTimeFormat().resolvedOptions().timeZone
   );
 
-  // Voice is optional
-  const wantsVoice = await askYesNo("\nDo you want voice notifications? (requires ElevenLabs API key)", false);
+  // Voice TTS options
+  console.log("\n┌─────────────────────────────────────────────────────────────┐");
+  console.log("│  VOICE NOTIFICATIONS                                        │");
+  console.log("├─────────────────────────────────────────────────────────────┤");
+  console.log("│  1. Piper (Recommended) - Free, local, neural TTS (~60MB)   │");
+  console.log("│  2. ElevenLabs - Cloud TTS, high quality, has usage limits  │");
+  console.log("│  3. macOS - Built-in 'say' command, always available        │");
+  console.log("│  4. None - No voice notifications                           │");
+  console.log("└─────────────────────────────────────────────────────────────┘");
 
+  const voiceChoice = await askWithDefault("\nSelect voice option (1-4)", "1");
+
+  let ttsProvider: TTSProvider = 'none';
   let elevenLabsApiKey: string | undefined;
   let elevenLabsVoiceId: string | undefined;
 
-  if (wantsVoice) {
-    elevenLabsApiKey = await ask("Enter your ElevenLabs API key: ");
-    elevenLabsVoiceId = await askWithDefault(
-      "Enter your preferred voice ID",
-      "s3TPKV1kjDlVtZbl4Ksh"
-    );
+  switch (voiceChoice) {
+    case "1":
+      ttsProvider = 'piper';
+      console.log("\n✓ Piper selected - will install during setup");
+      break;
+    case "2":
+      ttsProvider = 'elevenlabs';
+      elevenLabsApiKey = await ask("Enter your ElevenLabs API key: ");
+      elevenLabsVoiceId = await askWithDefault(
+        "Enter your preferred voice ID",
+        "s3TPKV1kjDlVtZbl4Ksh"
+      );
+      break;
+    case "3":
+      ttsProvider = 'macos';
+      console.log("\n✓ macOS 'say' selected - no additional setup needed");
+      break;
+    default:
+      ttsProvider = 'none';
+      console.log("\n✓ Voice notifications disabled");
   }
 
   return {
     daName,
     timeZone,
     userName,
+    ttsProvider,
     elevenLabsApiKey,
     elevenLabsVoiceId,
   };
@@ -539,6 +567,55 @@ Generated: ${new Date().toISOString().split("T")[0]}
 }
 
 // =============================================================================
+// PIPER TTS INSTALLATION
+// =============================================================================
+
+async function installPiperTTS(claudeDir: string): Promise<boolean> {
+  console.log("\nInstalling Piper TTS...");
+
+  // Check if piper is already installed
+  try {
+    await $`which piper`.quiet();
+    console.log("  ✓ Piper already installed");
+  } catch {
+    // Install piper-tts via pip
+    console.log("  Installing piper-tts via pip3...");
+    try {
+      await $`pip3 install piper-tts`.quiet();
+      console.log("  ✓ Piper installed");
+    } catch (e: any) {
+      console.error("  ⚠️  Failed to install piper-tts:", e.message);
+      console.log("  You can install manually: pip3 install piper-tts");
+      return false;
+    }
+  }
+
+  // Create piper-models directory
+  const modelsDir = join(claudeDir, "voice-server", "piper-models");
+  await $`mkdir -p ${modelsDir}`;
+
+  // Download voice model if not present
+  const modelPath = join(modelsDir, "en_US-lessac-medium.onnx");
+  const configPath = join(modelsDir, "en_US-lessac-medium.onnx.json");
+
+  if (!existsSync(modelPath)) {
+    console.log("  Downloading Piper voice model (~60MB)...");
+    try {
+      await $`curl -L -o ${modelPath} "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx"`;
+      await $`curl -L -o ${configPath} "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"`;
+      console.log("  ✓ Voice model downloaded");
+    } catch (e: any) {
+      console.error("  ⚠️  Failed to download voice model:", e.message);
+      return false;
+    }
+  } else {
+    console.log("  ✓ Voice model already present");
+  }
+
+  return true;
+}
+
+// =============================================================================
 // MAIN
 // =============================================================================
 
@@ -605,13 +682,24 @@ async function main() {
 
 DA="${config.daName}"
 TIME_ZONE="${config.timeZone}"
+
+# Voice TTS Configuration (Cascading: ElevenLabs → Piper → macOS)
+# Options: 'elevenlabs' | 'piper' | 'macos'
+TTS_PROVIDER="${config.ttsProvider === 'none' ? 'piper' : config.ttsProvider}"
 ${config.elevenLabsApiKey ? `ELEVENLABS_API_KEY="${config.elevenLabsApiKey}"` : "# ELEVENLABS_API_KEY="}
 ${config.elevenLabsVoiceId ? `ELEVENLABS_VOICE_ID="${config.elevenLabsVoiceId}"` : "# ELEVENLABS_VOICE_ID="}
+# MACOS_VOICE="Samantha"  # Run 'say -v ?' for available voices
 `;
     await Bun.write(`${claudeDir}/.env`, envFileContent);
 
     // Copy bundle files (hooks, voice-server, settings)
-    await copyBundleFiles(claudeDir, !!config.elevenLabsApiKey);
+    const voiceEnabled = config.ttsProvider !== 'none';
+    await copyBundleFiles(claudeDir, voiceEnabled);
+
+    // Install Piper TTS if selected
+    if (config.ttsProvider === 'piper') {
+      await installPiperTTS(claudeDir);
+    }
 
     // Add to shell profile
     console.log("Updating shell profile...");
@@ -620,11 +708,16 @@ ${config.elevenLabsVoiceId ? `ELEVENLABS_VOICE_ID="${config.elevenLabsVoiceId}"`
       ? `${process.env.HOME}/.zshrc`
       : `${process.env.HOME}/.bashrc`;
 
+    const ttsProviderExport = config.ttsProvider !== 'none'
+      ? `export TTS_PROVIDER="${config.ttsProvider}"`
+      : "";
+
     const envExports = `
 # PAI Configuration (added by Kai Bundle installer)
 export DA="${config.daName}"
 export TIME_ZONE="${config.timeZone}"
 export PAI_SOURCE_APP="$DA"
+${ttsProviderExport}
 ${config.elevenLabsApiKey ? `export ELEVENLABS_API_KEY="${config.elevenLabsApiKey}"` : ""}
 ${config.elevenLabsVoiceId ? `export ELEVENLABS_VOICE_ID="${config.elevenLabsVoiceId}"` : ""}
 `;
@@ -644,6 +737,7 @@ ${config.elevenLabsVoiceId ? `export ELEVENLABS_VOICE_ID="${config.elevenLabsVoi
       process.env.DA = config.daName;
       process.env.TIME_ZONE = config.timeZone;
       process.env.PAI_SOURCE_APP = config.daName;
+      if (config.ttsProvider !== 'none') process.env.TTS_PROVIDER = config.ttsProvider;
       if (config.elevenLabsApiKey) process.env.ELEVENLABS_API_KEY = config.elevenLabsApiKey;
       if (config.elevenLabsVoiceId) process.env.ELEVENLABS_VOICE_ID = config.elevenLabsVoiceId;
       console.log("Environment variables set for current session.");
@@ -654,8 +748,14 @@ ${config.elevenLabsVoiceId ? `export ELEVENLABS_VOICE_ID="${config.elevenLabsVoi
     // Summary
     printHeader("INSTALLATION COMPLETE");
 
-    const voiceStatus = config.elevenLabsApiKey ? "Enabled" : "Disabled";
-    const voiceInstructions = config.elevenLabsApiKey
+    const voiceStatusMap: Record<TTSProvider, string> = {
+      'piper': 'Piper (local neural TTS)',
+      'elevenlabs': 'ElevenLabs (cloud TTS)',
+      'macos': 'macOS say (built-in)',
+      'none': 'Disabled'
+    };
+    const voiceStatus = voiceStatusMap[config.ttsProvider];
+    const voiceInstructions = config.ttsProvider !== 'none'
       ? `  4. Start voice server: ~/.claude/voice-server/start.sh`
       : "";
 
@@ -675,8 +775,9 @@ Files installed:
   - ~/.claude/skills/CORE/CoreStack.md
   - ~/.claude/.env
   - ~/.claude/settings.json (Claude Code hooks)
-  - ~/.claude/hooks/* (completion hooks, security validator, etc.)${config.elevenLabsApiKey ? `
-  - ~/.claude/voice-server/* (TTS server, chime audio)` : ""}
+  - ~/.claude/hooks/* (completion hooks, security validator, etc.)${config.ttsProvider !== 'none' ? `
+  - ~/.claude/voice-server/* (TTS server, chime audio)` : ""}${config.ttsProvider === 'piper' ? `
+  - ~/.claude/voice-server/piper-models/* (Piper voice model)` : ""}
 
 Next steps:
 

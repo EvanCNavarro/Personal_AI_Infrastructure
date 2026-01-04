@@ -2,7 +2,7 @@
   <img src="kai.png" alt="The Official PAI (Kai) Bundle" width="256">
 </p>
 
-# The Official PAI (Kai) Bundle v1.2.0
+# The Official PAI (Kai) Bundle v1.3.0
 
 > **FOR AI AGENTS:** You are about to install the complete Kai bundle. Run the wizard, then install each pack in order.
 
@@ -33,7 +33,7 @@ When fully installed, the Kai bundle gives you:
 - A custom **History system** - Automatically captures sessions, decisions, learnings, and research
 - A custom set of **Hooks** - Event-driven automation that triggers on session start, tool use, and task completion
 - A custom **Skill system** - Modular capabilities that route based on intent
-- A custom **Voice notification system** - Spoken updates via ElevenLabs when tasks complete (optional)
+- A custom **Voice notification system** - Spoken updates with cascading TTS (Piper → ElevenLabs → macOS)
 - A custom **Agent swarm creation system** - Spawn parallel agents with personality templates
 - A custom **Security control system** - Protection against prompt injection and dangerous operations
 
@@ -65,7 +65,37 @@ The AI will read the pack and follow the installation instructions inside.
 - **Hooks** are the foundation - they enable all event-driven automation
 - **History** uses hooks to capture events and context
 - **Core Install** provides skill routing and identity framework
-- **Voice** uses hooks for completion events (requires ElevenLabs API key)
+- **Voice** uses hooks for completion events (no API key required with Piper)
+
+---
+
+## Voice TTS Options
+
+The bundle supports three TTS providers with automatic fallback:
+
+| Provider | Type | Quality | Cost | Setup |
+|----------|------|---------|------|-------|
+| **Piper** (default) | Local neural | High | Free | Auto-installed (~60MB model) |
+| **ElevenLabs** | Cloud API | Very High | Usage limits | Requires API key |
+| **macOS say** | Built-in | Basic | Free | Zero setup |
+
+During installation, you can choose your preferred provider. The system automatically falls back through the chain if a provider fails.
+
+### Configuration
+
+After installation, you can change providers in `~/.claude/.env`:
+
+```bash
+# Options: 'piper' | 'elevenlabs' | 'macos'
+TTS_PROVIDER="piper"
+
+# For ElevenLabs (optional)
+# ELEVENLABS_API_KEY="your_key"
+# ELEVENLABS_VOICE_ID="voice_id"
+
+# For macOS (optional)
+# MACOS_VOICE="Samantha"  # Run 'say -v ?' for options
+```
 
 ---
 
@@ -143,6 +173,14 @@ The Kai system embeds these principles from [PAI](https://danielmiessler.com/blo
 ---
 
 ## Changelog
+
+### 1.3.0 - 2026-01-04
+- **Cascading TTS System:** Voice notifications now support three providers with automatic fallback
+- **Piper TTS (default):** Free, local neural TTS - no API key required, ~60MB model
+- **ElevenLabs:** Cloud TTS still supported for high-quality voices
+- **macOS say:** Built-in fallback that always works
+- **Auto-install:** Piper and voice model are automatically installed during setup
+- **TTS_PROVIDER config:** Switch providers via environment variable
 
 ### 1.2.0 - 2025-12-30
 - **AI System Detection:** Scans for Claude Code, Cursor, Windsurf, Cline, Aider, Continue
