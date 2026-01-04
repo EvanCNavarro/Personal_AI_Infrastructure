@@ -2,70 +2,103 @@
   <img src="kai.png" alt="The Official PAI (Kai) Bundle" width="256">
 </p>
 
-# The Official PAI (Kai) Bundle v1.3.0
+# The Official PAI (Kai) Bundle v1.4.0
 
-> **FOR AI AGENTS:** You are about to install the complete Kai bundle. Run the wizard, then install each pack in order.
+> A complete AI assistant infrastructure with voice notifications, skills system, statusline, and more.
 
-## Quick Start
+---
 
+## Install From Scratch (5 minutes)
+
+**Prerequisites:** macOS or Linux with a terminal.
+
+### Step 1: Install Claude Code
 ```bash
-# Run the installation wizard
-bun run install.ts
+npm install -g @anthropic-ai/claude-code
 ```
+
+### Step 2: Install Bun
+```bash
+curl -fsSL https://bun.sh/install | bash
+source ~/.zshrc  # or restart terminal
+```
+
+### Step 3: Clone & Run Installer
+```bash
+git clone https://github.com/EvanCNavarro/Personal_AI_Infrastructure.git
+cd Personal_AI_Infrastructure
+bun Bundles/Kai/install.ts
+```
+
+### Step 4: Start Using
+```bash
+source ~/.zshrc  # load environment variables
+claude           # start Claude Code
+```
+
+---
+
+## What the Installer Does
 
 The wizard will:
-1. **Detect existing AI systems** - Scans for Claude Code, Cursor, Windsurf, Cline, Aider, Continue
-2. **Show you what it found** and explain what will be backed up
-3. **Ask for your confirmation** before making any changes
-4. **Create a safety backup** of your existing `~/.claude` directory to `~/.claude-BACKUP`
-5. **Ask a few questions** (your name, AI name, timezone, voice preference)
-6. **Install directly to `~/.claude`** - the standard Claude Code location
-7. **Configure environment variables** automatically
+1. **Detect existing AI systems** - Scans for Claude Code, Cursor, Windsurf, etc.
+2. **Create a safety backup** - Your existing `~/.claude` → `~/.claude-BACKUP`
+3. **Ask a few questions** - Your name, AI name, timezone, voice preference
+4. **Install everything** - Hooks, skills, tools, statusline, voice server
+5. **Personalize files** - Replaces templates with your actual info
+6. **Configure shell** - Sets environment variables automatically
 
-**Safety First:** The installer will not modify anything until you explicitly confirm. Your original files are always preserved in the backup.
-
----
-
-## What This Bundle Provides
-
-When fully installed, the Kai bundle gives you:
-
-- A custom **History system** - Automatically captures sessions, decisions, learnings, and research
-- A custom set of **Hooks** - Event-driven automation that triggers on session start, tool use, and task completion
-- A custom **Skill system** - Modular capabilities that route based on intent
-- A custom **Voice notification system** - Spoken updates with cascading TTS (Piper → ElevenLabs → macOS)
-- A custom **Agent swarm creation system** - Spawn parallel agents with personality templates
-- A custom **Security control system** - Protection against prompt injection and dangerous operations
+**Safety First:** Nothing is modified until you confirm. Your original files are always preserved.
 
 ---
 
-## Installation Order (CRITICAL)
-
-**After running the wizard, install these packs IN ORDER:**
-
-| # | Pack | Purpose | Dependencies |
-|---|------|---------|--------------|
-| 1 | [kai-hook-system](../../Packs/kai-hook-system.md) | Event-driven automation | None |
-| 2 | [kai-history-system](../../Packs/kai-history-system.md) | Memory and capture | Hooks |
-| 3 | [kai-core-install](../../Packs/kai-core-install.md) | Skills + Identity + Architecture | Hooks, History |
-| 4 | [kai-voice-system](../../Packs/kai-voice-system.md) | Voice notifications (optional) | Hooks, Core |
-
-### How to Install Packs
-
-Give each pack file to your AI and ask it to install:
+## What Gets Installed
 
 ```
-"Install kai-hook-system pack"
+~/.claude/
+├── CLAUDE.md              # Your personalized global instructions
+├── settings.json          # Claude Code hooks + statusline config
+├── statusline.sh          # Terminal status bar (model, cost, context)
+├── .env                   # Environment configuration
+├── hooks/                 # Event-driven automation
+│   ├── stop-hook-voice.ts # Voice notifications on completion
+│   ├── security-validator.ts
+│   └── ...
+├── skills/
+│   ├── CORE/              # Identity, stack preferences, contacts
+│   ├── CreateSkill/       # Meta-skill for creating new skills
+│   └── skill-index.json   # Searchable skill registry
+├── tools/                 # CLI utilities
+│   ├── SkillSearch.ts
+│   ├── PaiArchitecture.ts
+│   └── GenerateSkillIndex.ts
+├── config/
+│   └── voice-personalities.json
+└── voice-server/          # TTS server with gong notification
+    ├── server.ts
+    ├── chime.mp3
+    └── start.sh
 ```
 
-The AI will read the pack and follow the installation instructions inside.
+**Features:**
+- **Statusline** - Real-time display of model, cost, context usage in terminal
+- **Voice Notifications** - Spoken completion summaries (Piper/ElevenLabs/macOS)
+- **Gong Chime** - Audio notification before voice playback
+- **Skills System** - Modular capabilities with searchable index
+- **Security Hooks** - Protection against dangerous operations
+- **History Capture** - Sessions, decisions, learnings tracked
 
-### Why Order Matters
+---
 
-- **Hooks** are the foundation - they enable all event-driven automation
-- **History** uses hooks to capture events and context
-- **Core Install** provides skill routing and identity framework
-- **Voice** uses hooks for completion events (no API key required with Piper)
+## Post-Install: Start Voice Server
+
+If you enabled voice notifications, start the voice server:
+
+```bash
+~/.claude/voice-server/start.sh
+```
+
+The server runs in the background and plays spoken summaries when tasks complete.
 
 ---
 
@@ -187,6 +220,15 @@ The Kai system embeds these principles from [PAI](https://danielmiessler.com/blo
 ---
 
 ## Changelog
+
+### 1.4.0 - 2026-01-04
+- **Complete Installer:** Now installs ALL bundle components (was missing most files)
+- **Skills System:** Full skills with CORE identity, CreateSkill meta-skill, skill-index.json
+- **CLI Tools:** SkillSearch, PaiArchitecture, GenerateSkillIndex utilities
+- **Statusline:** Terminal status bar showing model, cost, context usage
+- **CLAUDE.md:** Global instructions template, personalized during install
+- **Config:** Voice personality mappings for different agent types
+- **Gong Notification:** Pre-TTS chime sound for voice completions
 
 ### 1.3.0 - 2026-01-04
 - **Cascading TTS System:** Voice notifications now support three providers with automatic fallback
