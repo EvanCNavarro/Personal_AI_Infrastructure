@@ -66,3 +66,7 @@ credentials/
 .claude/pai_updates/
 .claude/pai_backups/
 .claude/.pai-sync-history
+
+# Local Claude settings (may contain secrets from tool allowlists)
+Bundles/*/.claude/
+settings.local.json
