@@ -667,7 +667,7 @@ ${sep}`;
   const voiceId = getVoiceId(agentType);
 
   const payload: NotificationPayload = {
-    title: 'Neo',
+    title: process.env.DA || 'AI Assistant',
     message: voiceMessage,
     voice_enabled: true,
     priority: 'normal',
