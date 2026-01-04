@@ -309,6 +309,85 @@ async function copyBundleFiles(claudeDir: string, voiceEnabled: boolean): Promis
     console.log("  ✓ Voice server scripts made executable");
   }
 
+  // Copy config directory
+  const configSource = join(bundleDir, "config");
+  const configDest = join(claudeDir, "config");
+  if (existsSync(configSource)) {
+    console.log("  Copying config...");
+    copyDirRecursive(configSource, configDest, []);
+    console.log("  ✓ Config installed");
+  }
+
+  // Copy tools directory
+  const toolsSource = join(bundleDir, "tools");
+  const toolsDest = join(claudeDir, "tools");
+  if (existsSync(toolsSource)) {
+    console.log("  Copying tools...");
+    copyDirRecursive(toolsSource, toolsDest, []);
+    console.log("  ✓ Tools installed");
+  }
+
+  // Copy skills directory (templates - CORE will be regenerated with user config)
+  const skillsSource = join(bundleDir, "skills");
+  const skillsDest = join(claudeDir, "skills");
+  if (existsSync(skillsSource)) {
+    console.log("  Copying skills...");
+    // Copy all skills except CORE (which is generated with user's name)
+    const skillEntries = readdirSync(skillsSource);
+    for (const entry of skillEntries) {
+      if (entry === "CORE") continue; // Skip CORE, it's generated
+      const srcPath = join(skillsSource, entry);
+      const destPath = join(skillsDest, entry);
+      const stat = statSync(srcPath);
+      if (stat.isDirectory()) {
+        copyDirRecursive(srcPath, destPath, []);
+      } else {
+        if (!existsSync(skillsDest)) mkdirSync(skillsDest, { recursive: true });
+        copyFileSync(srcPath, destPath);
+      }
+    }
+    // Copy additional CORE files that aren't generated (SkillSystem.md, PaiArchitecture.md, Workflows/)
+    const coreSource = join(skillsSource, "CORE");
+    const coreDest = join(skillsDest, "CORE");
+    if (existsSync(coreSource)) {
+      const coreFiles = ["SkillSystem.md", "PaiArchitecture.md"];
+      for (const file of coreFiles) {
+        const srcFile = join(coreSource, file);
+        const destFile = join(coreDest, file);
+        if (existsSync(srcFile)) {
+          copyFileSync(srcFile, destFile);
+        }
+      }
+      // Copy Workflows directory
+      const workflowsSource = join(coreSource, "Workflows");
+      const workflowsDest = join(coreDest, "Workflows");
+      if (existsSync(workflowsSource)) {
+        copyDirRecursive(workflowsSource, workflowsDest, []);
+      }
+    }
+    console.log("  ✓ Skills installed");
+  }
+
+  // Copy statusline.sh
+  const statuslineSource = join(bundleDir, "statusline.sh");
+  const statuslineDest = join(claudeDir, "statusline.sh");
+  if (existsSync(statuslineSource)) {
+    console.log("  Copying statusline...");
+    copyFileSync(statuslineSource, statuslineDest);
+    await $`chmod +x ${statuslineDest}`;
+    console.log("  ✓ Statusline installed");
+  }
+
+  // Copy and personalize CLAUDE.md template
+  const claudeMdSource = join(bundleDir, "CLAUDE.md");
+  const claudeMdDest = join(claudeDir, "CLAUDE.md");
+  if (existsSync(claudeMdSource)) {
+    console.log("  Copying CLAUDE.md...");
+    // Note: Will be personalized after config is available
+    copyFileSync(claudeMdSource, claudeMdDest);
+    console.log("  ✓ CLAUDE.md installed");
+  }
+
   // Merge settings.json
   const settingsSource = join(bundleDir, "settings.template.json");
   const settingsDest = join(claudeDir, "settings.json");
@@ -692,9 +771,20 @@ ${config.elevenLabsVoiceId ? `ELEVENLABS_VOICE_ID="${config.elevenLabsVoiceId}"`
 `;
     await Bun.write(`${claudeDir}/.env`, envFileContent);
 
-    // Copy bundle files (hooks, voice-server, settings)
+    // Copy bundle files (hooks, voice-server, settings, skills, tools, etc.)
     const voiceEnabled = config.ttsProvider !== 'none';
     await copyBundleFiles(claudeDir, voiceEnabled);
+
+    // Personalize CLAUDE.md with user's name
+    const claudeMdPath = `${claudeDir}/CLAUDE.md`;
+    if (existsSync(claudeMdPath)) {
+      console.log("Personalizing CLAUDE.md...");
+      let claudeMd = readFileSync(claudeMdPath, "utf-8");
+      claudeMd = claudeMd.replace(/YOUR_NAME/g, config.userName);
+      claudeMd = claudeMd.replace(/YOUR_AI_NAME/g, config.daName);
+      writeFileSync(claudeMdPath, claudeMd);
+      console.log("  ✓ CLAUDE.md personalized");
+    }
 
     // Install Piper TTS if selected
     if (config.ttsProvider === 'piper') {
@@ -770,14 +860,18 @@ Your Kai system is configured:
   🔊 Voice: ${voiceStatus}
 
 Files installed:
-  - ~/.claude/skills/CORE/SKILL.md
-  - ~/.claude/skills/CORE/Contacts.md
-  - ~/.claude/skills/CORE/CoreStack.md
-  - ~/.claude/.env
-  - ~/.claude/settings.json (Claude Code hooks)
-  - ~/.claude/hooks/* (completion hooks, security validator, etc.)${config.ttsProvider !== 'none' ? `
-  - ~/.claude/voice-server/* (TTS server, chime audio)` : ""}${config.ttsProvider === 'piper' ? `
-  - ~/.claude/voice-server/piper-models/* (Piper voice model)` : ""}
+  - ~/.claude/CLAUDE.md (global instructions)
+  - ~/.claude/settings.json (Claude Code hooks + statusline)
+  - ~/.claude/statusline.sh (terminal status bar)
+  - ~/.claude/.env (environment config)
+  - ~/.claude/hooks/* (completion, security, events)
+  - ~/.claude/skills/CORE/* (identity, stack, contacts)
+  - ~/.claude/skills/CreateSkill/* (meta-skill)
+  - ~/.claude/skills/skill-index.json
+  - ~/.claude/tools/* (SkillSearch, PaiArchitecture, etc.)
+  - ~/.claude/config/* (voice personalities)${config.ttsProvider !== 'none' ? `
+  - ~/.claude/voice-server/* (TTS server, gong chime)` : ""}${config.ttsProvider === 'piper' ? `
+  - ~/.claude/voice-server/piper-models/* (Piper voice)` : ""}
 
 Next steps:
 
